@@ -2,6 +2,7 @@
 
   python store.py merge subs/candidate.csv   # проверить кандидата, взять улучшения
   python store.py export subs/submit.csv     # собрать сабмит (с полной проверкой)
+  python store.py merge-best other/best.json # слить хранилище с другой машины
   python store.py check subs/any.csv         # финальная проверка файла перед отправкой
   python store.py status                     # текущий суммарный счёт
 
@@ -164,5 +165,11 @@ if __name__ == "__main__":
         merge(sys.argv[2], load_puzzles())
     elif cmd == "export":
         export(sys.argv[2], load_puzzles())
+    elif cmd == "merge-best":
+        # слить чужой best.json (с другой машины): каждая программа снова проверяется
+        with open(sys.argv[2]) as f:
+            other = json.load(f)
+        imp, gain = offer({p: v["program"] for p, v in other.items()}, load_puzzles(), "merge-best")
+        print(f"merge-best {sys.argv[2]}: improved {imp}, gained {gain}")
     elif cmd == "check":
         print("VALID, total", check_file(sys.argv[2], load_puzzles()))
