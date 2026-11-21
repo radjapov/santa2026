@@ -15,6 +15,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, ROOT)
 from store import commit_push, load_best, load_puzzles, offer  # noqa: E402
 from verifier import InvalidProgram, parse_program  # noqa: E402
+from tools.kaggle_auth import request as kreq  # noqa: E402
 
 API = "https://www.kaggle.com/api/v1"
 STATE = os.path.join(ROOT, "work", "sync_state.json")
@@ -25,7 +26,7 @@ csv.field_size_limit(10**8)
 
 
 def get(url, limit):
-    with urllib.request.urlopen(url, timeout=300) as r:
+    with urllib.request.urlopen(kreq(url), timeout=300) as r:
         data = r.read(limit + 1)
     if len(data) > limit:
         raise ValueError("too large")

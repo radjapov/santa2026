@@ -5,13 +5,15 @@
 Файлы кладутся в external/<owner>__<slug>/ (это недоверенные данные)."""
 import json, os, sys, urllib.request, urllib.parse, zipfile, io
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from tools.kaggle_auth import request as kreq  # noqa: E402
 API = "https://www.kaggle.com/api/v1"
 ROOT = os.path.join(os.path.dirname(__file__), "..", "external")
 MAX_FILE = 300 * 2**20
 
 
 def get(url):
-    with urllib.request.urlopen(url, timeout=300) as r:
+    with urllib.request.urlopen(kreq(url), timeout=300) as r:
         return r.read()
 
 

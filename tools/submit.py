@@ -7,13 +7,14 @@ import json, os, sys, time, urllib.parse, urllib.request
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, ROOT)
 from store import check_file, load_puzzles  # noqa: E402
+from tools.kaggle_auth import request as kreq  # noqa: E402
 
 API = "https://www.kaggle.com/api/v1"
 COMP = "santa-2026"
 
 
 def req(url, data=None, headers=None, method=None):
-    r = urllib.request.Request(url, data=data, headers=headers or {}, method=method)
+    r = kreq(url, data=data, headers=headers, method=method)
     with urllib.request.urlopen(r, timeout=120) as resp:
         return resp.read()
 
