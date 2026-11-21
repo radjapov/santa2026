@@ -2,7 +2,7 @@
 # Фоновый трек v2: LNS с записью рецептов + CP-SAT перекомбинация (код goodpjw2008, Apache-2.0).
 # Каждый проход: экспорт лучшего из хранилища -> recomb_pass -> merge обратно через наш верификатор.
 #   JOBS=14 LO=60 HI=180 tools/recomb_loop.sh      Остановка: touch work/STOP_RC
-S="$(cd "$(dirname "$0")/.." && pwd)"; R=$S/work/rc; JOBS=${JOBS:-3}; LO=${LO:-60}; HI=${HI:-180}
+S="$(cd "$(dirname "$0")/.." && pwd)"; R=${RDIR:-$S/work/rc}; JOBS=${JOBS:-3}; LO=${LO:-60}; HI=${HI:-180}
 G=$S/third_party/goodpjw_dag_lns
 mkdir -p $R/src $R/data $R/bin $R/work
 cp $G/elf.py $G/pfmt.py $G/recombine.py $G/recomb_pass.py $R/src/
