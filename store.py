@@ -2,6 +2,7 @@
 
   python store.py merge subs/candidate.csv   # проверить кандидата, взять улучшения
   python store.py export subs/submit.csv     # собрать сабмит (с полной проверкой)
+  python store.py check subs/any.csv         # финальная проверка файла перед отправкой
   python store.py status                     # текущий суммарный счёт
 
 best/best.json: {puzzle_id: {"program": [...], "score": n, "source": "..."}}
@@ -54,6 +55,33 @@ def read_sub(path):
         return {row["id"]: row["program"] for row in csv.DictReader(f)}
 
 
+EXPECTED_IDS = [f"scored_{i:04d}" for i in range(1, 1001)]
+
+
+def check_file(path, puzzles, expect_total=None):
+    """Полная проверка файла сабмита по Evaluation. Возвращает счёт или падает."""
+    with open(path, newline="", encoding="utf-8") as f:
+        r = csv.reader(f)
+        header = next(r)
+        if header != ["id", "program"]:
+            raise SystemExit(f"bad header {header!r}")
+        rows = list(r)
+    ids = [row[0] for row in rows]
+    if any(len(row) != 2 for row in rows):
+        raise SystemExit("row with wrong column count")
+    if len(ids) != len(set(ids)) or sorted(ids) != EXPECTED_IDS:
+        raise SystemExit("ID set != scored_0001..scored_1000 exactly once")
+    total = 0
+    for pid, s in rows:
+        try:
+            total += run(parse_program(s), *puzzles[pid])
+        except InvalidProgram as e:
+            raise SystemExit(f"INVALID {pid}: {e}")
+    if expect_total is not None and total != expect_total:
+        raise SystemExit(f"score mismatch {total} != {expect_total}")
+    return total
+
+
 def merge(path, puzzles):
     best = load_best()
     sub = read_sub(path)
@@ -90,14 +118,12 @@ def export(path, puzzles):
         s = json.dumps(prog, separators=(",", ":"))
         total += run(parse_program(s), *puzzles[pid])  # проверяем ровно то, что пишем
         rows.append((pid, s))
-    with open(path, "w", newline="") as f:
+    with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["id", "program"])
         w.writerows(rows)
-    # повторная проверка уже записанного файла
-    back = read_sub(path)
-    assert len(back) == len(puzzles)
-    assert sum(run(parse_program(back[p]), *puzzles[p]) for p in puzzles) == total
+    # повторная проверка уже записанного файла: формат, полный набор ID, счёт
+    check_file(path, puzzles, expect_total=total)
     print(f"exported {path}: {len(rows)} puzzles, total score {total}")
 
 
@@ -110,3 +136,5 @@ if __name__ == "__main__":
         merge(sys.argv[2], load_puzzles())
     elif cmd == "export":
         export(sys.argv[2], load_puzzles())
+    elif cmd == "check":
+        print("VALID, total", check_file(sys.argv[2], load_puzzles()))

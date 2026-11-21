@@ -1,7 +1,7 @@
 """Строгий верификатор Santa 2026 — The Elf Calculator.
 
-Правила сверены с вкладкой Data ("Calculator rules"). Не сверены лимиты
-с вкладки Evaluation (макс. число инструкций, размер ячейки CSV) — TODO.
+Правила сверены с вкладкой Data ("Calculator rules") и Evaluation
+("Program limits"): 48 регистров, <=4096 инструкций, <=131072 байт UTF-8 в ячейке.
 """
 from __future__ import annotations
 
@@ -19,9 +19,8 @@ class Rules:
     # Data: "A target is covered when its value appears in any register, including at the start."
     start_counts_as_target: bool = True
     min_value: int = 1
-    # TODO(Evaluation): лимит числа инструкций и размера ячейки CSV.
-    max_len: int | None = None
-    max_cell_chars: int | None = None
+    max_len: int = 4096
+    max_cell_bytes: int = 131072
 
 
 class InvalidProgram(Exception):
@@ -32,7 +31,7 @@ def run(program, starts, targets, value_limit, rules: Rules = Rules()):
     """Исполняет программу; возвращает число инструкций. Бросает InvalidProgram."""
     if not isinstance(program, list):
         raise InvalidProgram("program is not a list")
-    if rules.max_len is not None and len(program) > rules.max_len:
+    if len(program) > rules.max_len:
         raise InvalidProgram(f"too long: {len(program)}")
     n = rules.num_regs
     if len(starts) > n:
@@ -82,8 +81,9 @@ def run(program, starts, targets, value_limit, rules: Rules = Rules()):
 
 
 def parse_program(s: str, rules: Rules = Rules()):
-    if rules.max_cell_chars is not None and len(s) > rules.max_cell_chars:
-        raise InvalidProgram(f"cell too long: {len(s)} chars")
+    nbytes = len(s.encode("utf-8"))
+    if nbytes > rules.max_cell_bytes:
+        raise InvalidProgram(f"cell too long: {nbytes} bytes")
     try:
         return json.loads(s)
     except json.JSONDecodeError as e:
