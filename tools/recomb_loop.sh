@@ -18,8 +18,7 @@ open('$R/work/focus_ids.txt','w').write('\n'.join(p for p,v in b.items() if $LO<
   python3 store.py merge $R/work/best.csv
   rm -rf $R/work/rc_*
   # AUTOPUSH=1: после каждого прохода сохранить улучшения в git (контейнер может исчезнуть)
-  if [ "${AUTOPUSH:-0}" = 1 ] && ! git diff --quiet best/best.json; then
-    git commit -q -m "Store: $(python3 store.py status | awk '{print $4}') (recomb pass)" best/best.json \
-      && git push -q origin HEAD 2>&1 | tail -1
+  if [ "${AUTOPUSH:-0}" = 1 ]; then
+    python3 store.py commit-push "Store: $(python3 store.py status | awk '{print $4}') (recomb pass)"
   fi
 done

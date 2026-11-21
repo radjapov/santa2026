@@ -18,6 +18,7 @@ import json
 import os
 import sys
 import tempfile
+import time
 
 from verifier import InvalidProgram, parse_program, run
 
@@ -64,15 +65,39 @@ def locked():
             fcntl.flock(lf, fcntl.LOCK_UN)
 
 
-def offer(cands, puzzles, source):
+def commit_push(message):
+    """Коммит и пуш best/best.json под отдельной git-блокировкой (несколько процессов)."""
+    import subprocess
+    root = os.path.dirname(os.path.abspath(__file__))
+    with open(os.path.join(root, "work", "git.lock"), "w") as lf:
+        fcntl.flock(lf, fcntl.LOCK_EX)
+        g = lambda *a: subprocess.run(["git", "-C", root, *a], capture_output=True, text=True)
+        if g("diff", "--quiet", "best/best.json").returncode == 0:
+            return "nothing to commit"
+        g("commit", "-q", "-m", message, "best/best.json")
+        for _ in range(4):
+            r = g("push", "-q", "origin", "HEAD")
+            if r.returncode == 0:
+                return f"pushed: {message}"
+            g("pull", "-q", "--no-rebase", "-X", "ours", "origin", "main")
+            time.sleep(5)
+        return f"push failed: {r.stderr.strip()[-200:]}"
+
+
+def offer(cands, puzzles, source, quiet=False):
     """cands: {pid: program}. Проверяет каждую, под блокировкой берёт строго лучшие.
     Возвращает (число улучшенных головоломок, выигрыш в инструкциях)."""
     checked = {}
+    bad = []
     for pid, prog in cands.items():
         try:
             checked[pid] = (prog, run(prog, *puzzles[pid]))
         except InvalidProgram as e:
-            print(f"  INVALID {source} {pid}: {e}", flush=True)
+            bad.append(pid)
+            if not quiet:
+                print(f"  INVALID {source} {pid}: {e}", flush=True)
+    if bad and quiet:
+        print(f"  {source}: {len(bad)} invalid programs rejected", flush=True)
     imp = gain = 0
     with locked():
         best = load_best()
@@ -165,6 +190,8 @@ if __name__ == "__main__":
         merge(sys.argv[2], load_puzzles())
     elif cmd == "export":
         export(sys.argv[2], load_puzzles())
+    elif cmd == "commit-push":
+        print(commit_push(sys.argv[2]))
     elif cmd == "merge-best":
         # слить чужой best.json (с другой машины): каждая программа снова проверяется
         with open(sys.argv[2]) as f:
