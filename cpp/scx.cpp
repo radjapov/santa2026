@@ -145,9 +145,93 @@ struct GroupRebuild {
     }
 };
 
+// ---------------------------------------------------------------- глубокая пересборка группы
+// Цели группы строятся по очереди в общий растущий пул: сначала те, что находятся точным поиском (<= scanC),
+// иначе раскладка T = X*Y + R  или  X*(Y+1) - R (X из пула; Y=1 даёт цепочку T = A ± D от близкого значения),
+// с ветвлением по нескольким лучшим разбиениям на копиях состояния.
+struct DeepRebuild {
+    u64 L = 0; int maxc = 4, scanC = 3, reps = 4, maxDepth = 5; vector<int> branch{3, 2, 1};
+    long long calls = 0;
+    struct St { Searcher S; vector<Step> steps; };
+    void commit(St& st, const vector<Step>& o) {
+        for (auto& s : o) { if (st.S.inP(s.r)) continue; st.steps.push_back(s); st.S.extend(s.r); }
+    }
+    double est(Searcher& S, u64 v) {
+        if (v == 0 || S.inP(v)) return 0;
+        if (S.inS1(v) >= 0) return 1;
+        vector<Step> o; if (S.cost2(v, o) == 2) return 2;
+        int b = 64 - __builtin_clzll(v);
+        return 3 + max(0, b - 24) / 9.0;
+    }
+    bool build(St& st, u64 T, int depth, int cap) {
+        calls++;
+        if (st.S.inP(T)) return true;
+        int room = cap - (int)st.steps.size();
+        if (room <= 0) return false;
+        vector<Step> o;
+        if (st.S.find(T, min(maxc, room), o) >= 0) { commit(st, o); return true; }
+        if (depth >= maxDepth || room < 3) return false;
+        struct Sp { double e; u64 X, Y, R; int sg; };
+        vector<Sp> sp;
+        for (u64 X : st.S.pool) {
+            if (X < 2) continue;
+            u64 Y = T / X;
+            for (int sg = 0; sg < 2; sg++) {
+                u64 YY = Y + sg;
+                if (YY < 1) continue;
+                if (sg && (i128)X * YY > (i128)L) continue;
+                u64 RR = sg ? X * YY - T : T - X * Y;
+                if (YY == 1 && RR == 0) continue;
+                double e = est(st.S, YY) + (RR ? est(st.S, RR) + 1 : 0) + 1 + 1e-3 * (rng() % 1000);
+                sp.push_back({e, X, YY, RR, sg});
+            }
+        }
+        if (sp.empty()) return false;
+        int B = branch[min<size_t>(depth, branch.size() - 1)];
+        partial_sort(sp.begin(), sp.begin() + min<size_t>(B, sp.size()), sp.end(), [](const Sp& a, const Sp& b) { return a.e < b.e; });
+        St bestSt; bool ok = false;
+        for (int k = 0; k < B && k < (int)sp.size(); k++) {
+            auto& s = sp[k];
+            St c = (k + 1 < B && k + 1 < (int)sp.size()) ? st : std::move(st);
+            int cp = ok ? min(cap, (int)bestSt.steps.size() - 1) : cap;
+            if (!build(c, s.Y, depth + 1, cp - 1 - (s.R ? 1 : 0))) { if (k + 1 >= B || k + 1 >= (int)sp.size()) break; else continue; }
+            if (s.R && !build(c, s.R, depth + 1, cp - 2)) { if (k + 1 >= B || k + 1 >= (int)sp.size()) break; else continue; }
+            u64 PP = s.X * s.Y;
+            if (PP == T) commit(c, {{3, s.X, s.Y, T}});
+            else { commit(c, {{3, s.X, s.Y, PP}}); commit(c, {s.sg ? Step{2, PP, s.R, T} : Step{1, PP, s.R, T}}); }
+            if ((int)c.steps.size() <= cp && (!ok || c.steps.size() < bestSt.steps.size())) { bestSt = std::move(c); ok = true; }
+            if (k + 1 >= B || k + 1 >= (int)sp.size()) break;
+        }
+        if (!ok) return false;
+        st = std::move(bestSt); return true;
+    }
+    int solve(const LNS& Ln, const vector<u64>& basePool, const vector<u64>& Qv, int budget, vector<Step>& out) {
+        L = Ln.P.L; int best = budget + 1;
+        for (int rep = 0; rep < reps; rep++) {
+            St st; st.S.K4 = Ln.S.K4; st.S.deep = Ln.S.deep; st.S.window = false; st.S.setPool(basePool, L);
+            vector<u64> rem = Qv; shuffle(rem.begin(), rem.end(), rng);
+            int cap = best - 1; bool ok = true;
+            while (!rem.empty() && ok) {
+                int bc = 99, bi = -1; vector<Step> o, bo;
+                for (size_t i = 0; i < rem.size(); i++) {
+                    int c = st.S.find(rem[i], min(scanC, bc - 1), o);
+                    if (c >= 0 && c < bc) { bc = c; bi = i; bo = o; if (c == 0) break; }
+                }
+                if (bi >= 0) { commit(st, bo); rem.erase(rem.begin() + bi); }
+                else { u64 T = rem.back(); rem.pop_back(); ok = build(st, T, 0, cap); }
+                if (!ok) break;   // после неудачи st может быть перемещён
+                if ((int)st.steps.size() > cap) { ok = false; break; }
+                rem.erase(remove_if(rem.begin(), rem.end(), [&](u64 t) { return st.S.inP(t); }), rem.end());
+            }
+            if (ok && (int)st.steps.size() < best) { best = st.steps.size(); out = st.steps; }
+        }
+        return best <= budget ? best : -1;
+    }
+};
+
 // ---------------------------------------------------------------- LNS на групповых ходах
 struct SCX {
-    LNS L; GroupRebuild GR; int gmin = 2, gmax = 8; double eqProb = 0.2;
+    LNS L; GroupRebuild GR; DeepRebuild DR; int gmin = 2, gmax = 8; double eqProb = 0.2; bool deepMode = false, gap = false;
     long long tried = 0, acc = 0, strictN = 0;
     SCX(const Puzzle& p) : L(p), GR(L) {}
 
@@ -165,7 +249,16 @@ struct SCX {
         vector<u64> basePool = L.makePool(excl);
         tried++;
         vector<Step> steps; vector<int> owner;
-        int used = GR.solve(basePool, Q, budget, steps, owner);
+        int used;
+        if (deepMode) {
+            vector<u64> Qv; for (int q : Q) Qv.push_back(G.N[q].v);
+            if (gap) {   // замер: стоимость глубокой пересборки без ограничения бюджетом
+                vector<Step> tmp; int c = DR.solve(L, basePool, Qv, budget + 40, tmp);
+                cerr << "GAP k " << Q.size() << " rs " << rs << " deep " << c << " diff " << (c < 0 ? 99 : c - rs) << "\n";
+                if (c < 0 || c > budget) return false;
+                steps = tmp; used = c;
+            } else used = DR.solve(L, basePool, Qv, budget, steps);
+        } else used = GR.solve(basePool, Q, budget, steps, owner);
         if (used < 0) return false;
         // позиции: перед самой ранней целью группы, в порядке рецептов
         double p0 = 1e18; for (int q : Q) p0 = min(p0, G.N[q].pos);
@@ -216,7 +309,7 @@ struct SCX {
 };
 
 int main(int argc, char** argv) {
-    double tper = 30; u64 seed = 1; int prune = 0, dbg = 0; int beam = 8, alts = 6, gmax = 8, gmin = 2, cheapC = 3; double eq = 0.2;
+    double tper = 30; u64 seed = 1; int prune = 0, dbg = 0, deep = 0, gapm = 0, reps = 4, dmaxc = 4; int beam = 8, alts = 6, gmax = 8, gmin = 2, cheapC = 3; double eq = 0.2;
     for (int i = 1; i < argc; i++) {
         string a = argv[i];
         if (a == "--time") tper = atof(argv[++i]);
@@ -229,11 +322,15 @@ int main(int argc, char** argv) {
         else if (a == "--eq") eq = atof(argv[++i]);
         else if (a == "--prune") prune = atoi(argv[++i]);
         else if (a == "--dbg") dbg = 1;
+        else if (a == "--deep") deep = atoi(argv[++i]);
+        else if (a == "--gap") gapm = 1;
+        else if (a == "--reps") reps = atoi(argv[++i]);
+        else if (a == "--dmaxc") dmaxc = atoi(argv[++i]);
     }
     rng.seed(seed); ios::sync_with_stdio(false);
     Puzzle p;
     while (readPuzzle(cin, p)) {
-        SCX X(p); X.GR.beam = beam; X.GR.alts = alts; X.GR.cheapC = cheapC; X.gmax = gmax; X.gmin = gmin; X.eqProb = eq; X.GR.prune = prune; X.GR.dbg = dbg;
+        SCX X(p); X.GR.beam = beam; X.GR.alts = alts; X.GR.cheapC = cheapC; X.gmax = gmax; X.gmin = gmin; X.eqProb = eq; X.GR.prune = prune; X.GR.dbg = dbg; X.deepMode = deep; X.gap = gapm; X.DR.reps = reps; X.DR.maxc = dmaxc;
         double t0 = now(); int n0 = p.prog.size();
         if (!X.L.G.fromProgram(p)) { cerr << p.id << " parse-fail\n"; continue; }
         X.run(tper);

@@ -2,7 +2,7 @@
 usage: python src/recomb_pass.py --only work/focus_ids.txt --time 20 --cp 20 --jobs 19
 """
 import argparse, os, sys, subprocess, glob, time, random, json
-from multiprocessing import Pool
+from multiprocessing import get_context  # fork: Python 3.14 по умолчанию forkserver, модуль без __main__-защиты
 sys.path.insert(0, os.path.dirname(__file__))
 from pfmt import *
 import recombine as RC
@@ -88,7 +88,7 @@ def work(pid):
     except ValueError: return pid, None
     return pid, prog if n < len(S[pid]) else None
 
-with Pool(a.jobs) as pool:
+with get_context("fork").Pool(a.jobs) as pool:
     res = pool.map(work, ids, chunksize=1)
 gain = 0
 for pid, prog in res:
