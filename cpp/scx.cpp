@@ -232,6 +232,7 @@ struct DeepRebuild {
 // ---------------------------------------------------------------- LNS на групповых ходах
 struct SCX {
     LNS L; GroupRebuild GR; DeepRebuild DR; int gmin = 2, gmax = 8; double eqProb = 0.2; bool deepMode = false, gap = false;
+    int lnsEvery = 0; double lnsTime = 2; long long lnsRuns = 0, lnsWins = 0; int sideways = 0;
     long long tried = 0, acc = 0, strictN = 0;
     SCX(const Puzzle& p) : L(p), GR(L) {}
 
@@ -299,9 +300,15 @@ struct SCX {
                     break;
                 }
             }
+            if (moved && lnsEvery > 0 && ++sideways >= lnsEvery) {
+                // гибрид: новая программа той же длины -> короткий прогон elfopt-LNS от неё
+                sideways = 0; lnsRuns++;
+                int before = L.G.count(); L.run(min(lnsTime, tlimit - (now() - t0)));
+                if (L.G.count() < before) { lnsWins++; improved = true; }
+            }
             if (L.G.count() < bestC) { best = L.G; bestC = L.G.count(); stall = 0; }
             if (improved) continue;
-            if (moved) { if (++stall > 60) { L.G = best; stall = 0; } continue; }
+            if (moved) { if (++stall > 60 + 20 * (lnsEvery > 0)) { L.G = best; stall = 0; } continue; }
             break;   // полный проход без единого хода
         }
         L.G = best; return bestC;
@@ -309,7 +316,7 @@ struct SCX {
 };
 
 int main(int argc, char** argv) {
-    double tper = 30; u64 seed = 1; int prune = 0, dbg = 0, deep = 0, gapm = 0, reps = 4, dmaxc = 4; int beam = 8, alts = 6, gmax = 8, gmin = 2, cheapC = 3; double eq = 0.2;
+    double tper = 30; u64 seed = 1; int lnsEvery = 0; double lnsTime = 2; int prune = 0, dbg = 0, deep = 0, gapm = 0, reps = 4, dmaxc = 4; int beam = 8, alts = 6, gmax = 8, gmin = 2, cheapC = 3; double eq = 0.2;
     for (int i = 1; i < argc; i++) {
         string a = argv[i];
         if (a == "--time") tper = atof(argv[++i]);
@@ -324,20 +331,22 @@ int main(int argc, char** argv) {
         else if (a == "--dbg") dbg = 1;
         else if (a == "--deep") deep = atoi(argv[++i]);
         else if (a == "--gap") gapm = 1;
+        else if (a == "--lns-every") lnsEvery = atoi(argv[++i]);
+        else if (a == "--lns-time") lnsTime = atof(argv[++i]);
         else if (a == "--reps") reps = atoi(argv[++i]);
         else if (a == "--dmaxc") dmaxc = atoi(argv[++i]);
     }
     rng.seed(seed); ios::sync_with_stdio(false);
     Puzzle p;
     while (readPuzzle(cin, p)) {
-        SCX X(p); X.GR.beam = beam; X.GR.alts = alts; X.GR.cheapC = cheapC; X.gmax = gmax; X.gmin = gmin; X.eqProb = eq; X.GR.prune = prune; X.GR.dbg = dbg; X.deepMode = deep; X.gap = gapm; X.DR.reps = reps; X.DR.maxc = dmaxc;
+        SCX X(p); X.GR.beam = beam; X.GR.alts = alts; X.GR.cheapC = cheapC; X.gmax = gmax; X.gmin = gmin; X.eqProb = eq; X.GR.prune = prune; X.GR.dbg = dbg; X.deepMode = deep; X.gap = gapm; X.DR.reps = reps; X.DR.maxc = dmaxc; X.lnsEvery = lnsEvery; X.lnsTime = lnsTime; X.L.kicks = 50; X.L.kickSlack = 2;
         double t0 = now(); int n0 = p.prog.size();
         if (!X.L.G.fromProgram(p)) { cerr << p.id << " parse-fail\n"; continue; }
         X.run(tper);
         vector<array<int, 4>> out;
         if (!X.L.G.fixPressure() || !X.L.G.emit(out)) { cerr << p.id << " emit-fail\n"; continue; }
         cerr << p.id << " " << n0 << " -> " << out.size() << " tried " << X.tried << " acc " << X.acc << " strict " << X.strictN
-             << " nodes " << X.GR.nodes << " t " << fixed << setprecision(1) << now() - t0 << "\n";
+             << " lns " << X.lnsRuns << "/" << X.lnsWins << " t " << fixed << setprecision(1) << now() - t0 << "\n";
         if ((int)out.size() < n0) {
             cout << "R " << p.id << " " << n0 << " " << out.size() << "\n";
             for (auto& x : out) cout << (char)x[0] << " " << x[1] << " " << x[2] << " " << x[3] << "\n";
