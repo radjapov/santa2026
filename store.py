@@ -10,7 +10,9 @@ best/best.json: {puzzle_id: {"program": [...], "score": n, "source": "..."}}
 """
 from __future__ import annotations
 
+import contextlib
 import csv
+import fcntl
 import json
 import os
 import sys
@@ -50,6 +52,40 @@ def save_best(best):
     os.replace(tmp, BEST)
 
 
+@contextlib.contextmanager
+def locked():
+    """Эксклюзивная блокировка хранилища (несколько процессов пишут параллельно)."""
+    with open(BEST + ".lock", "w") as lf:
+        fcntl.flock(lf, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lf, fcntl.LOCK_UN)
+
+
+def offer(cands, puzzles, source):
+    """cands: {pid: program}. Проверяет каждую, под блокировкой берёт строго лучшие.
+    Возвращает (число улучшенных головоломок, выигрыш в инструкциях)."""
+    checked = {}
+    for pid, prog in cands.items():
+        try:
+            checked[pid] = (prog, run(prog, *puzzles[pid]))
+        except InvalidProgram as e:
+            print(f"  INVALID {source} {pid}: {e}", flush=True)
+    imp = gain = 0
+    with locked():
+        best = load_best()
+        for pid, (prog, n) in checked.items():
+            old = best.get(pid)
+            if old is None or n < old["score"]:
+                gain += (old["score"] - n) if old else 0
+                imp += 1
+                best[pid] = {"program": prog, "score": n, "source": source}
+        if imp:
+            save_best(best)
+    return imp, gain
+
+
 def read_sub(path):
     with open(path, newline="") as f:
         return {row["id"]: row["program"] for row in csv.DictReader(f)}
@@ -83,27 +119,19 @@ def check_file(path, puzzles, expect_total=None):
 
 
 def merge(path, puzzles):
-    best = load_best()
-    sub = read_sub(path)
-    improved = gained = bad = 0
-    for pid, s in sub.items():
+    cands = {}
+    bad = 0
+    for pid, s in read_sub(path).items():
         if pid not in puzzles:
             bad += 1
             continue
         try:
-            prog = parse_program(s)
-            score = run(prog, *puzzles[pid])
+            cands[pid] = parse_program(s)
         except InvalidProgram as e:
             bad += 1
             print(f"  invalid {pid}: {e}")
-            continue
-        old = best.get(pid)
-        if old is None or score < old["score"]:
-            gained += (old["score"] - score) if old else 0
-            best[pid] = {"program": prog, "score": score, "source": os.path.basename(path)}
-            improved += 1
-    save_best(best)
-    print(f"merged {path}: improved {improved}, gained {gained}, invalid {bad}")
+    imp, gain = offer(cands, puzzles, os.path.basename(path))
+    print(f"merged {path}: improved {imp}, gained {gain}, unparsable {bad}")
 
 
 def export(path, puzzles):
