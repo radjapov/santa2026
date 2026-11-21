@@ -49,7 +49,22 @@ mkdir -p work && JOBS=12 nohup tools/recomb_loop.sh > work/rc.log 2>&1 &
 nohup python3 tools/atakan_loop.py --lo 181 > work/atakan.log 2>&1 &
 ```
 
-Остановка: `touch work/STOP_RC` и `touch work/STOP_ATK`.
+Автосинхронизация с публичным фронтом (нужен Kaggle-токен в `~/.kaggle/access_token`, см. ниже):
+
+```bash
+nohup python3 tools/sync_public.py --every 5400 --push > work/sync.log 2>&1 &
+```
+
+Для автопуша цикла перекомбинации запускайте его с `AUTOPUSH=1`.
+Остановка: `touch work/STOP_RC`, `touch work/STOP_SYNC`, `touch work/STOP_ATK`.
+
+## Kaggle-токен на локальной машине
+
+```bash
+mkdir -p ~/.kaggle && nano ~/.kaggle/access_token && chmod 600 ~/.kaggle/access_token
+```
+
+(вставить токен `KGAT_...` со страницы kaggle.com → Settings → API)
 
 ## Сабмит
 

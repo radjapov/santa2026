@@ -79,8 +79,16 @@ def commit_push(message):
             r = g("push", "-q", "origin", "HEAD")
             if r.returncode == 0:
                 return f"pushed: {message}"
-            g("pull", "-q", "--no-rebase", "-X", "ours", "origin", "main")
-            time.sleep(5)
+            # другая машина успела запушить: сливаем её хранилище через верификатор,
+            # после этого наш best.json не хуже обоих, и конфликт решается в пользу нашего
+            g("fetch", "-q", "origin", "main")
+            show = g("show", "origin/main:best/best.json")
+            if show.returncode == 0:
+                theirs = json.loads(show.stdout)
+                offer({p: v["program"] for p, v in theirs.items()}, load_puzzles(), "remote", quiet=True)
+                g("commit", "-q", "-m", "Store: merge remote improvements", "best/best.json")
+            g("pull", "-q", "--no-rebase", "--no-edit", "-X", "ours", "origin", "main")
+            time.sleep(3)
         return f"push failed: {r.stderr.strip()[-200:]}"
 
 
