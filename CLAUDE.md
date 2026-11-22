@@ -6,7 +6,7 @@
 ## Правила работы
 - Любая программа попадает в `best/best.json` только через `store.offer` / `store.py merge` (проверка `verifier.run`, только строго короче).
 - Перед любым сабмитом: `python3 store.py export subs/submit.csv && python3 store.py check subs/submit.csv`.
-  Отправка: `python3 tools/submit.py subs/submit.csv "описание"`. **Сабмит только с явного подтверждения пользователя.**
+  Отправка: `python3 tools/submit.py subs/submit.csv "описание"`. **Сабмит только с явного подтверждения пользователя** (исключение — авто-сабмит, разрешён 22 ноя, см. «Что запущено»).
 - Наш верификатор совпадает с официальным счётом до инструкции (проверено тремя сабмитами: 132 685, 132 670, 132 637).
 - Делиться кодом вне команды приватно нельзя (правила). Метод до финала не публикуем.
 - Репозиторий приватный. Kaggle-токен — в `~/.kaggle/access_token`, никогда не в чат и не в git.
@@ -31,8 +31,11 @@
 ## Что запущено (домашний ПК, WSL2 Ubuntu, i5-14400F 16 потоков, WSL видит 15 ГБ, RTX 4060)
 - **После перезагрузки: `tools/start_all.sh`** (статус: `tools/start_all.sh status`, pid-файлы work/*.pid). Запускает:
   - `AUTOPUSH=1 JOBS=12 tools/recomb_loop.sh` → `work/rc.log` — LNS (elfopt) + CP-SAT перекомбинация, длины 60–180.
-  - то же с `RDIR=work/rc2 LO=181 HI=400 JOBS=4` → `work/rc2.log` — длины 181–400 (с 21 ноя 18:30).
-  - `tools/sync_public.py --every 1800 --push` → `work/sync.log` — синхронизация раз в 30 мин.
+  - rc2 (181–400) отключён 22 ноя (0 за все проходы), rc теперь JOBS=16.
+  - `tools/autosubmit.py --every 600 --min 3` → `work/autosubmit.log` — **авто-сабмит разрешён пользователем 22 ноя**:
+    отправка, если хранилище лучше лучшего отправленного на ≥3 (лимит Kaggle 100/сутки, свой кап 30).
+    Остановка: `touch work/STOP_AUTOSUBMIT`. Ручные сабмиты — по-прежнему только с подтверждения.
+  - `tools/sync_public.py --every 600 --push` → `work/sync.log` — синхронизация раз в 10 мин.
 - **Kaggle (с 22 ноя):** 4 приватных CPU-ноутбука radjapovanvar/elf-rc-0..3 гоняют перекомбинацию длин 30–180 (доли по кругу)
   до 11 ч. `python3 tools/kaggle_rc.py status` / `pull` (забрать best.csv → store merge через верификатор) /
   `push` (перезапуск от свежего хранилища; делать после pull, раз в ~12 ч).
