@@ -15,8 +15,8 @@ git config user.name > /dev/null || { git config user.name Claude; git config us
 rm -f work/STOP_RC work/STOP_SYNC work/STOP_AUTOSUBMIT
 
 if alive rc; then echo "rc (60–180) уже работает"
-else rm -rf work/rc/work/rc_*; AUTOPUSH=1 JOBS=16 nohup tools/recomb_loop.sh > work/rc.log 2>&1 &
-  echo $! > work/rc.pid; echo "запущен rc: перекомбинация 60–180, 16 потоков"; fi
+else rm -rf work/rc/work/rc_*; AUTOPUSH=1 JOBS=${RC_JOBS:-6} nohup tools/recomb_loop.sh > work/rc.log 2>&1 &
+  echo $! > work/rc.pid; echo "запущен rc: перекомбинация 60–180, ${RC_JOBS:-6} потоков"; fi
 
 # rc2 (181–400) отключён 22 ноя: 0 за все проходы; потоки отданы rc.
 
