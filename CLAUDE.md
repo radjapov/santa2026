@@ -33,6 +33,9 @@
   - `AUTOPUSH=1 JOBS=12 tools/recomb_loop.sh` → `work/rc.log` — LNS (elfopt) + CP-SAT перекомбинация, длины 60–180.
   - то же с `RDIR=work/rc2 LO=181 HI=400 JOBS=4` → `work/rc2.log` — длины 181–400 (с 21 ноя 18:30).
   - `tools/sync_public.py --every 1800 --push` → `work/sync.log` — синхронизация раз в 30 мин.
+- **Kaggle (с 22 ноя):** 4 приватных CPU-ноутбука radjapovanvar/elf-rc-0..3 гоняют перекомбинацию длин 30–180 (доли по кругу)
+  до 11 ч. `python3 tools/kaggle_rc.py status` / `pull` (забрать best.csv → store merge через верификатор) /
+  `push` (перезапуск от свежего хранилища; делать после pull, раз в ~12 ч).
 - Остановка: `touch work/STOP_RC`, `touch work/STOP_SYNC`. Пуш `best.json` — через `store.commit_push` (git-блокировка,
   при конфликте чужое хранилище сливается через верификатор). Облачная сессия тоже может пушить.
 - recomb_loop.sh копирует скрипты в work/rc/src ТОЛЬКО при старте цикла: правки third_party требуют перезапуска цикла.
