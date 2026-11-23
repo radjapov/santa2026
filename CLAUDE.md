@@ -26,8 +26,9 @@
 - Почти весь прирост — подбор публичного фронта (`tools/sync_public.py`) + перекомбинация (+4 за проход после починки).
 - Публичный фронт — по сути один общий файл; все топ-ноутбуки сливают друг друга (royalacecat Public Frontier,
   goodpjw2008 LNS + CP-SAT — слаг меняется с каждой версией, hanifnoerrofiq, asteriospanoras Gift per Run, mizeroluckygall).
-- asteriospanoras «Gift per Run»: улучшение лежит только в исходнике ноутбука (CSV не пишет) — синхронизация его не видит,
-  забирать вручную: скачать исходник (kernels/pull), взять `CHANGE = {...}` через json.loads, `store.offer`.
+- Улучшения в исходниках ноутбуков (asteriospanoras `CHANGE = {...}`, pardheev «Best Public Score» `GIFT = '''base64 zlib json'''`)
+  с 23 ноя забирает `tools/gift_sync.py` внутри цикла синхронизации (только разбор данных). Исходник любого ноутбука для
+  чтения: `python3 tools/pull_src.py owner/slug` → external/src/.
 
 ## Что запущено (домашний ПК, WSL2 Ubuntu, i5-14400F 16 потоков, WSL видит 15 ГБ, RTX 4060)
 - **После перезагрузки: `tools/start_all.sh`** (статус: `tools/start_all.sh status`, pid-файлы work/*.pid). Запускает:

@@ -137,6 +137,11 @@ def main():
         state = load_state()
         n, imp, gain = sync_once(P, state, log)
         json.dump(state, open(STATE, "w"))
+        try:  # улучшения, лежащие прямо в исходниках ноутбуков (pardheev GIFT, asteriospanoras CHANGE)
+            from tools.gift_sync import run as gift_run
+            gi, gg = gift_run(log); imp += gi; gain += gg
+        except Exception as e:
+            log(f"gift: error {e}")
         tot = sum(v["score"] for v in load_best().values())
         log(f"sync: {n} new files, improved {imp} puzzles, gain {gain}, total {tot}")
         if imp and a.push:
