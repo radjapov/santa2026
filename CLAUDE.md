@@ -21,7 +21,8 @@
 - Хранилище 128 514 = публичный фронт (goodpjw2008 «Fresh-Program Re-Search LB 128,514», −1 677 за день, вышел, пока ПК был
   выключен 12:10–19:14); сабмит 58782099 = 128 514. Граница серебра 128 513, бронзы 128 516; лучше нас 135, вровень 31.
 - **goodpjw2008 замерил: поиск по только что изменённым программам — 12.3 инстр./час, по отполированным — 1.9 (×6).**
-  Поэтому дома rcf (свежие за 12 ч) 12 потоков + rc 4; Kaggle — 5 ноутбуков на свежих, цикл pull+push сам
+  Поэтому дома: rcf (перекомбинация свежих за 12 ч) 6 потоков + wj (стратегии Wang Jakie incremental/factored на свежих,
+  `tools/wj_loop.sh`, `work/wj.log`, код third_party/wangjakie_gpu_nb, Apache-2.0) 6 потоков + rc 4; Kaggle — 5 ноутбуков на свежих, цикл pull+push сам
   (`tools/kaggle_cycle.sh`, запускается из start_all.sh, лог work/kaggle_cycle.log).
 - После перезагрузки ПК проверять `git fetch` — облачная сессия может уйти вперёд (22 ноя: 27 коммитов, −1322);
   вливать через `store.py merge-best <файл>` (верификатор), затем `git merge -X ours origin/main`.
@@ -40,7 +41,8 @@
   - `tools/autosubmit.py --every 600 --min 3` → `work/autosubmit.log` — **авто-сабмит разрешён пользователем 22 ноя**:
     отправка, если хранилище лучше лучшего отправленного на ≥3 (лимит Kaggle 100/сутки, свой кап 30).
     Остановка: `touch work/STOP_AUTOSUBMIT`. Ручные сабмиты — по-прежнему только с подтверждения.
-  - `tools/sync_public.py --every 600 --push` → `work/sync.log` — синхронизация раз в 10 мин.
+  - `tools/sync_public.py --every 180 --push` → `work/sync.log` — синхронизация раз в 3 мин (+ «подарки» в исходниках
+    + GitHub Hansen0223/Santa_2026 при новом коммите, `tools/gift_sync.py`).
 - **Kaggle (с 22 ноя):** 4 приватных CPU-ноутбука radjapovanvar/elf-rc-0..3 гоняют перекомбинацию длин 30–180 (доли по кругу)
   до 11 ч. `python3 tools/kaggle_rc.py status` / `pull` (забрать best.csv → store merge через верификатор) /
   `push` (перезапуск от свежего хранилища; делать после pull, раз в ~12 ч). Лимит Kaggle — 5 одновременных CPU-сессий;

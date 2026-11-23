@@ -66,3 +66,34 @@ def run(log=print):
 
 if __name__ == "__main__":
     run()
+
+
+GITHUB = [("https://github.com/Hansen0223/Santa_2026", "external/github/Santa_2026")]
+
+
+def run_github(log=print):
+    """Публичные GitHub-репозитории с программами: при новом коммите — merge всех CSV id,program (только данные)."""
+    import subprocess, glob as _g
+    from store import merge as _merge
+    imp_total = 0
+    for url, d in GITHUB:
+        path = os.path.join(ROOT, d)
+        if not os.path.isdir(path):
+            subprocess.run(["git", "clone", "-q", "--depth", "1", url, path], capture_output=True)
+            before = ""
+        else:
+            before = subprocess.run(["git", "-C", path, "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+            subprocess.run(["git", "-C", path, "fetch", "-q", "--depth", "1", "origin"], capture_output=True)
+            subprocess.run(["git", "-C", path, "reset", "-q", "--hard", "FETCH_HEAD"], capture_output=True)
+        after = subprocess.run(["git", "-C", path, "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+        if after == before:
+            continue
+        P = load_puzzles(); n = 0
+        for f in _g.glob(os.path.join(path, "**", "*.csv"), recursive=True):
+            try:
+                if not open(f).readline().startswith("id,program"): continue
+                n += 1; _merge(f, P)
+            except Exception:
+                continue
+        log(f"github {url.split('/')[-2]}: new commit {after[:8]}, merged {n} csv")
+    return imp_total
