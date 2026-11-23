@@ -6,7 +6,7 @@ mkdir -p work
 alive() { [ -f "work/$1.pid" ] && kill -0 "$(cat "work/$1.pid")" 2> /dev/null; }
 
 if [ "$1" = status ]; then
-  for n in rc rcf sync autosubmit; do alive $n && echo "работает: $n (pid $(cat work/$n.pid))" || echo "НЕ работает: $n"; done
+  for n in rc rcf sync autosubmit kaggle_cycle; do alive $n && echo "работает: $n (pid $(cat work/$n.pid))" || echo "НЕ работает: $n"; done
   python3 store.py status; exit 0
 fi
 
@@ -30,5 +30,9 @@ else nohup python3 tools/sync_public.py --every 600 --push >> work/sync.log 2>&1
 if alive autosubmit; then echo "autosubmit уже работает"
 else nohup python3 tools/autosubmit.py --every 600 --min 3 >> work/autosubmit.log 2>&1 &
   echo $! > work/autosubmit.pid; echo "запущен autosubmit: сабмит при выигрыше >= 3 (разрешено пользователем 22 ноя)"; fi
+
+if alive kaggle_cycle; then echo "kaggle_cycle уже работает"
+else LOOP=1 nohup tools/kaggle_cycle.sh >> work/kaggle_cycle.log 2>&1 &
+  echo $! > work/kaggle_cycle.pid; echo "запущен kaggle_cycle: pull+push Kaggle-ноутбуков по готовности (свежие головоломки)"; fi
 
 python3 store.py status
