@@ -32,8 +32,8 @@ else nohup python3 tools/sync_public.py --every 180 --push >> work/sync.log 2>&1
   echo $! > work/sync.pid; echo "запущен sync: публичный фронт раз в 3 мин"; fi
 
 if alive autosubmit; then echo "autosubmit уже работает"
-else nohup python3 tools/autosubmit.py --every 600 --min 3 >> work/autosubmit.log 2>&1 &
-  echo $! > work/autosubmit.pid; echo "запущен autosubmit: сабмит при выигрыше >= 3 (разрешено пользователем 22 ноя)"; fi
+else nohup python3 tools/autosubmit.py --every 300 --min 1 >> work/autosubmit.log 2>&1 &
+  echo $! > work/autosubmit.pid; echo "запущен autosubmit: сабмит при выигрыше >= 1 (разрешено пользователем 22 ноя)"; fi
 
 if alive kaggle_cycle; then echo "kaggle_cycle уже работает"
 else LOOP=1 nohup tools/kaggle_cycle.sh >> work/kaggle_cycle.log 2>&1 &
