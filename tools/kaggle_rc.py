@@ -82,7 +82,7 @@ def shards(n, lo, hi, fresh=0):
     ids = sorted((pid for pid, v in B.items() if lo <= v["score"] <= hi), key=lambda p: -B[p]["score"])
     if fresh:   # только головоломки, изменившиеся за последние fresh часов (свежие программы в ~6 раз продуктивнее)
         import subprocess
-        h = subprocess.run(["git", "-C", ROOT, "log", f"--before={fresh} hours ago", "-1", "--format=%H", "--", "best/best.json"], capture_output=True, text=True).stdout.strip()
+        h = subprocess.run(["git", "-C", ROOT, "log", f"--before={int(fresh)} hours ago", "-1", "--format=%H", "--", "best/best.json"], capture_output=True, text=True).stdout.strip()
         old = json.loads(subprocess.run(["git", "-C", ROOT, "show", f"{h}:best/best.json"], capture_output=True, text=True).stdout)
         ids = [p for p in ids if json.dumps(B[p]["program"]) != json.dumps(old[p]["program"])]
     return [ids[k::n] for k in range(n)]
@@ -90,6 +90,7 @@ def shards(n, lo, hi, fresh=0):
 
 def push(a):
     for k, ids in enumerate(shards(a.shards, a.lo, a.hi, a.fresh)):
+        if a.only is not None and k != a.only: continue
         src = KERNEL.replace("__HOURS__", str(a.hours)).replace("__SHARD__", str(k))
         text = src.replace("__PAYLOAD__", payload(ids))
         req = {"slug": f"{USER}/elf-rc-{k}", "newTitle": f"elf rc {k}", "text": text, "language": "python",
@@ -100,6 +101,25 @@ def push(a):
         except urllib.error.HTTPError as e:
             print(k, "HTTP", e.code, e.read()[:300]); continue
         print(f"shard {k}: {len(ids)} puzzles, {len(text) // 1024} KB ->", r.get("url") or r, r.get("error") or "")
+
+
+def kstatus(k):
+    try:
+        return api("kernels/status?" + urllib.parse.urlencode({"userName": USER, "kernelSlug": f"elf-rc-{k}"})).get("status")
+    except urllib.error.HTTPError as e:
+        return f"http{e.code}"
+
+
+def cycle(a):
+    """Каждый закончившийся (или несуществующий) ноутбук: pull своей доли → push на свежих."""
+    for k in range(a.shards):
+        st = kstatus(k)
+        if st in ("running", "queued"): continue
+        print(f"[{time.strftime('%H:%M')}] shard {k}: {st} -> pull + push", flush=True)
+        a.only = k
+        if st == "complete": pull(a)
+        push(a)
+    a.only = None
 
 
 def status(a):
@@ -114,6 +134,7 @@ def status(a):
 def pull(a):
     os.makedirs(OUT, exist_ok=True); P = load_puzzles()
     for k in range(a.shards):
+        if a.only is not None and k != a.only: continue
         q = urllib.parse.urlencode({"userName": USER, "kernelSlug": f"elf-rc-{k}"})
         try:
             d = api("kernels/output?" + q)
@@ -131,9 +152,11 @@ def pull(a):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["push", "status", "pull"])
+    ap.add_argument("cmd", choices=["push", "status", "pull", "cycle"])
     ap.add_argument("--shards", type=int, default=4); ap.add_argument("--lo", type=int, default=30)
     ap.add_argument("--hi", type=int, default=180); ap.add_argument("--hours", type=float, default=11)
     ap.add_argument("--fresh", type=float, default=0, help="только изменившиеся за N часов")
+    ap.add_argument("--only", type=int, default=None, help="только ноутбук k")
     a = ap.parse_args()
-    {"push": push, "status": status, "pull": pull}[a.cmd](a)
+    ap2 = None
+    {"push": push, "status": status, "pull": pull, "cycle": cycle}[a.cmd](a)
