@@ -24,8 +24,8 @@ else rm -rf work/rcf/work/rc_*; RDIR=$PWD/work/rcf FRESH_HOURS=12 LO=30 HI=400 A
   echo $! > work/rcf.pid; echo "запущен rcf: перекомбинация изменившихся за 12 ч (30–400), ${RCF_JOBS:-6} потоков"; fi
 
 if alive wj; then echo "wj уже работает"
-else rm -f work/STOP_WJ; AUTOPUSH=1 JOBS=${WJ_JOBS:-6} FRESH_HOURS=12 nohup tools/wj_loop.sh > work/wj.log 2>&1 &
-  echo $! > work/wj.pid; echo "запущен wj: стратегии Wang Jakie на свежих (12 ч), ${WJ_JOBS:-6} потоков"; fi
+else rm -f work/STOP_WJ; AUTOPUSH=1 JOBS=${WJ_JOBS:-6} FRESH_HOURS=24 nohup tools/wj_loop.sh > work/wj.log 2>&1 &
+  echo $! > work/wj.pid; echo "запущен wj: стратегии Wang Jakie на свежих (24 ч), ${WJ_JOBS:-6} потоков"; fi
 
 if alive sync; then echo "sync уже работает"
 else nohup python3 tools/sync_public.py --every 180 --push >> work/sync.log 2>&1 &

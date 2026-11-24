@@ -23,7 +23,7 @@ OUT = os.path.join(ROOT, "work", "kaggle_rc")
 
 KERNEL = r'''# Private compute notebook (Santa 2026). Payload: elfopt + recombination scripts (Apache-2.0) + programs.
 import base64, glob, io, os, shutil, subprocess, sys, tarfile, time
-T0 = time.time(); HOURS = __HOURS__; SHARD = __SHARD__
+T0 = time.time(); HOURS = __HOURS__; SHARD = __SHARD__; ENGINE = "__ENGINE__"
 R = "/kaggle/tmp/rc"; os.makedirs(R, exist_ok=True)
 PAYLOAD = "__PAYLOAD__"
 tarfile.open(fileobj=io.BytesIO(base64.b64decode(PAYLOAD)), mode="r:xz").extractall(R)
@@ -35,13 +35,22 @@ except ImportError:
     subprocess.run([sys.executable, "-m", "pip", "install", "-q", "ortools"], check=True)
 os.makedirs(f"{R}/bin", exist_ok=True)
 subprocess.run(["g++", "-std=c++17", "-O3", "-march=native", "-o", f"{R}/bin/elfopt", f"{R}/src/elfopt.cpp"], check=True)
+os.makedirs(f"{R}/third_party/wangjakie", exist_ok=True)
+subprocess.run(["g++", "-std=c++17", "-O3", "-march=native", "-o", f"{R}/third_party/wangjakie/incremental", f"{R}/src/incremental.cpp"], check=True)
 jobs = os.cpu_count() or 4
+shutil.copy(f"{R}/work/best.csv", "/kaggle/working/best.csv")
+if not open(f"{R}/work/focus_ids.txt").read().strip():
+    print("empty focus: nothing to do"); sys.exit(0)
 print("shard", SHARD, "cpus", jobs, "setup", round(time.time() - T0), "s", flush=True)
 k = 0
 while time.time() - T0 < HOURS * 3600 - 45 * 60:
     k += 1
-    subprocess.run([sys.executable, "src/recomb_pass.py", "--only", "work/focus_ids.txt", "--time", "15", "--cp", "25",
-                    "--jobs", str(jobs), "--bin", "bin/elfopt", "--tag", f"kg{SHARD}"], cwd=R)
+    if ENGINE == "wj" or (ENGINE == "mix" and k % 2):   # стратегия Wang Jakie incremental (лучшая на свежих по замерам goodpjw2008)
+        subprocess.run([sys.executable, "src/wj_driver.py", "--strategy", "incremental", "--rounds", "1000", "--only", "work/focus_ids.txt",
+                        "--jobs", str(jobs), "--batch", "1", "--tag", f"kg{SHARD}"], cwd=R)
+    else:
+        subprocess.run([sys.executable, "src/recomb_pass.py", "--only", "work/focus_ids.txt", "--time", "15", "--cp", "25",
+                        "--jobs", str(jobs), "--bin", "bin/elfopt", "--tag", f"kg{SHARD}"], cwd=R)
     for d in glob.glob(f"{R}/work/rc_*"): shutil.rmtree(d, ignore_errors=True)
     shutil.copy(f"{R}/work/best.csv", "/kaggle/working/best.csv")
     print("pass", k, "done at", round((time.time() - T0) / 60), "min", flush=True)
@@ -62,8 +71,9 @@ def payload(ids):
     with tarfile.open(fileobj=buf, mode="w:xz") as t:
         def add(name, data):
             ti = tarfile.TarInfo(name); ti.size = len(data); ti.mtime = int(time.time()); t.addfile(ti, io.BytesIO(data))
-        for f in ["elfopt.cpp", "elf.py", "pfmt.py", "recombine.py", "recomb_pass.py"]:
+        for f in ["elfopt.cpp", "elf.py", "pfmt.py", "recombine.py", "recomb_pass.py", "wj_driver.py"]:
             add(f"src/{f}", open(os.path.join(G, f), "rb").read())
+        add("src/incremental.cpp", open(os.path.join(ROOT, "third_party/wangjakie_gpu_nb/incremental.cpp"), "rb").read())
         add("work/best.csv", export_csv(P, B).encode())
         add("work/focus_ids.txt", "\n".join(ids).encode())
     return base64.b64encode(buf.getvalue()).decode()
@@ -80,18 +90,16 @@ def export_csv(P, B):
 def shards(n, lo, hi, fresh=0):
     B = load_best()
     ids = sorted((pid for pid, v in B.items() if lo <= v["score"] <= hi), key=lambda p: -B[p]["score"])
-    if fresh:   # только головоломки, изменившиеся за последние fresh часов (свежие программы в ~6 раз продуктивнее)
-        import subprocess
-        h = subprocess.run(["git", "-C", ROOT, "log", f"--before={int(fresh)} hours ago", "-1", "--format=%H", "--", "best/best.json"], capture_output=True, text=True).stdout.strip()
-        old = json.loads(subprocess.run(["git", "-C", ROOT, "show", f"{h}:best/best.json"], capture_output=True, text=True).stdout)
-        ids = [p for p in ids if json.dumps(B[p]["program"]) != json.dumps(old[p]["program"])]
+    if fresh:   # только свежие головоломки (окно от последнего изменения хранилища)
+        from tools.fresh_ids import fresh_ids
+        F = set(fresh_ids(fresh, lo, hi)); ids = [p for p in ids if p in F]
     return [ids[k::n] for k in range(n)]
 
 
 def push(a):
     for k, ids in enumerate(shards(a.shards, a.lo, a.hi, a.fresh)):
         if a.only is not None and k != a.only: continue
-        src = KERNEL.replace("__HOURS__", str(a.hours)).replace("__SHARD__", str(k))
+        src = KERNEL.replace("__HOURS__", str(a.hours)).replace("__SHARD__", str(k)).replace("__ENGINE__", a.engine)
         text = src.replace("__PAYLOAD__", payload(ids))
         req = {"slug": f"{USER}/elf-rc-{k}", "newTitle": f"elf rc {k}", "text": text, "language": "python",
                "kernelType": "script", "isPrivate": True, "enableGpu": False, "enableTpu": False, "enableInternet": True,
@@ -157,6 +165,7 @@ if __name__ == "__main__":
     ap.add_argument("--hi", type=int, default=180); ap.add_argument("--hours", type=float, default=11)
     ap.add_argument("--fresh", type=float, default=0, help="только изменившиеся за N часов")
     ap.add_argument("--only", type=int, default=None, help="только ноутбук k")
+    ap.add_argument("--engine", default="mix", choices=["wj", "rc", "mix"], help="wj / rc (elfopt+CP-SAT) / mix (по очереди)")
     a = ap.parse_args()
     ap2 = None
     {"push": push, "status": status, "pull": pull, "cycle": cycle}[a.cmd](a)

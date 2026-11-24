@@ -13,11 +13,7 @@ while [ ! -e work/STOP_RC ]; do
   python3 store.py export $R/work/best.csv > /dev/null || exit 1
   if [ -n "$FRESH_HOURS" ]; then
     # FRESH_HOURS=12: только головоломки, чьи программы изменились за последние N часов (git-история best.json)
-    OLD=$(git -C $S log --before="$FRESH_HOURS hours ago" -1 --format=%H -- best/best.json)
-    git -C $S show $OLD:best/best.json > $R/work/old.json
-    python3 -c "
-import json; from store import load_best; b=load_best(); o=json.load(open('$R/work/old.json'))
-open('$R/work/focus_ids.txt','w').write('\n'.join(p for p,v in b.items() if $LO<=v['score']<=$HI and json.dumps(v['program'])!=json.dumps(o[p]['program'])))"
+    python3 tools/fresh_ids.py $FRESH_HOURS $LO $HI > $R/work/focus_ids.txt
   else
   python3 -c "
 from store import load_best; b=load_best()

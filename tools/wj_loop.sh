@@ -12,11 +12,7 @@ while [ ! -e work/STOP_WJ ]; do
   for strat in incremental factored; do
     [ -e work/STOP_WJ ] && break
     python3 store.py export $R/work/best.csv > /dev/null || exit 1
-    OLD=$(git -C $S log --before="$FRESH_HOURS hours ago" -1 --format=%H -- best/best.json)
-    git -C $S show $OLD:best/best.json > $R/work/old.json
-    python3 -c "
-import json; from store import load_best; b=load_best(); o=json.load(open('$R/work/old.json'))
-open('$R/work/focus_ids.txt','w').write('\n'.join(p for p,v in b.items() if 30<=v['score']<=400 and json.dumps(v['program'])!=json.dumps(o[p]['program'])))"
+    python3 tools/fresh_ids.py $FRESH_HOURS 30 400 > $R/work/focus_ids.txt
     (cd $R && python3 src/wj_driver.py --strategy $strat --rounds $ROUNDS --only work/focus_ids.txt --jobs $JOBS --batch 1 --tag wj) 2>&1
     python3 store.py merge $R/work/best.csv
     [ "${AUTOPUSH:-0}" = 1 ] && python3 store.py commit-push "Store: $(python3 store.py status | awk '{print $4}') (wj $strat)"
